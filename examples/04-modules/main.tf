@@ -5,23 +5,25 @@ terraform {
   required_version = ">= 1.0"
   
   required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 3.0"
     }
   }
 }
 
-provider "aws" {
-  region = var.aws_region
+provider "azurerm" {
+  features {}
 }
 
-# Use the VPC module
-module "vpc" {
-  source = "./vpc"
+# Use the VNet module
+module "vnet" {
+  source = "./vnet"
 
-  vpc_name             = var.vpc_name
-  vpc_cidr             = var.vpc_cidr
+  vnet_name            = var.vnet_name
+  location             = var.location
+  resource_group_name  = var.resource_group_name
+  address_space        = [var.address_space]
   public_subnet_count  = var.public_subnet_count
   private_subnet_count = var.private_subnet_count
 
@@ -33,28 +35,25 @@ module "vpc" {
 }
 
 # Use module outputs in other resources
-resource "aws_security_group" "example" {
-  name_prefix = "example-sg-"
-  description = "Example security group in module-created VPC"
-  vpc_id      = module.vpc.vpc_id
+resource "azurerm_network_security_group" "example" {
+  name                = "nsg-example"
+  location            = module.vnet.location
+  resource_group_name = module.vnet.resource_group_name
 
-  ingress {
-    description = "HTTPS"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+  security_rule {
+    name                       = "HTTPS"
+    priority                   = 100
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "443"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
   }
 
   tags = {
-    Name        = "example-security-group"
+    Name        = "example-nsg"
     Environment = var.environment
   }
 }

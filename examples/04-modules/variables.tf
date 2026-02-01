@@ -1,17 +1,23 @@
-variable "aws_region" {
-  description = "AWS region"
+variable "location" {
+  description = "Azure region"
   type        = string
-  default     = "us-east-1"
+  default     = "East US"
 }
 
-variable "vpc_name" {
-  description = "Name of the VPC"
+variable "resource_group_name" {
+  description = "Name of the resource group"
   type        = string
-  default     = "example-vpc"
+  default     = "rg-terraform-modules-example"
 }
 
-variable "vpc_cidr" {
-  description = "CIDR block for VPC"
+variable "vnet_name" {
+  description = "Name of the Virtual Network"
+  type        = string
+  default     = "vnet-example"
+}
+
+variable "address_space" {
+  description = "Address space for VNet"
   type        = string
   default     = "10.0.0.0/16"
 }

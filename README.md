@@ -1,12 +1,13 @@
-# Learn Terraform
+# Learn Terraform with Azure
 
-A comprehensive guide to learning and using Terraform - the Infrastructure as Code (IaC) tool.
+A comprehensive guide to learning and using Terraform with Microsoft Azure - the Infrastructure as Code (IaC) tool for Azure cloud.
 
 ## Table of Contents
 
 - [What is Terraform?](#what-is-terraform)
-- [Why Use Terraform?](#why-use-terraform)
+- [Why Use Terraform with Azure?](#why-use-terraform-with-azure)
 - [Installation](#installation)
+- [Azure Setup](#azure-setup)
 - [Getting Started](#getting-started)
 - [Core Concepts](#core-concepts)
 - [Basic Commands](#basic-commands)
@@ -21,22 +22,23 @@ A comprehensive guide to learning and using Terraform - the Infrastructure as Co
 
 Terraform is an open-source Infrastructure as Code (IaC) tool created by HashiCorp. It allows you to define and provision infrastructure using a declarative configuration language called HashiCorp Configuration Language (HCL).
 
-With Terraform, you can:
-- Manage infrastructure across multiple cloud providers (AWS, Azure, GCP, etc.)
-- Version control your infrastructure
-- Automate infrastructure provisioning
-- Create reusable infrastructure components
-- Track changes and maintain state
+With Terraform and Azure, you can:
+- Manage Azure infrastructure as code
+- Version control your Azure infrastructure
+- Automate Azure resource provisioning
+- Create reusable Azure infrastructure components
+- Track changes and maintain state of Azure resources
 
-## Why Use Terraform?
+## Why Use Terraform with Azure?
 
-- **Cloud Agnostic**: Works with multiple cloud providers and services
-- **Declarative**: Describe what you want, not how to create it
-- **Version Control**: Track infrastructure changes in Git
-- **Reusable**: Create modules for repeatable infrastructure patterns
-- **Planning**: Preview changes before applying them
-- **State Management**: Keep track of your infrastructure state
-- **Community**: Large ecosystem of providers and modules
+- **Infrastructure as Code**: Define Azure resources in version-controlled configuration files
+- **Declarative**: Describe what Azure resources you want, not how to create them
+- **Version Control**: Track Azure infrastructure changes in Git
+- **Reusable**: Create modules for repeatable Azure infrastructure patterns
+- **Planning**: Preview Azure resource changes before applying them
+- **State Management**: Keep track of your Azure infrastructure state
+- **Azure Integration**: Native support for Azure services through the AzureRM provider
+- **Multi-Environment**: Easily manage dev, staging, and production environments
 
 ## Installation
 
@@ -63,25 +65,71 @@ choco install terraform
 terraform version
 ```
 
+## Azure Setup
+
+Before you can use Terraform with Azure, you need to set up authentication.
+
+### Option 1: Azure CLI Authentication (Recommended for Development)
+
+1. **Install Azure CLI:**
+   - macOS: `brew install azure-cli`
+   - Linux: Follow [official docs](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli)
+   - Windows: Download from Microsoft
+
+2. **Login to Azure:**
+   ```bash
+   az login
+   ```
+
+3. **Set your subscription (if you have multiple):**
+   ```bash
+   az account list --output table
+   az account set --subscription "YOUR_SUBSCRIPTION_ID"
+   ```
+
+### Option 2: Service Principal (Recommended for Production/CI/CD)
+
+1. **Create a Service Principal:**
+   ```bash
+   az ad sp create-for-rbac --name "terraform-sp" --role="Contributor" --scopes="/subscriptions/YOUR_SUBSCRIPTION_ID"
+   ```
+
+2. **Set environment variables:**
+   ```bash
+   export ARM_CLIENT_ID="<appId>"
+   export ARM_CLIENT_SECRET="<password>"
+   export ARM_SUBSCRIPTION_ID="<subscription_id>"
+   export ARM_TENANT_ID="<tenant>"
+   ```
+
+### Verify Azure Access
+```bash
+az account show
+```
+
 ## Getting Started
 
-### 1. Create Your First Configuration
+### 1. Create Your First Azure Configuration
 
 Create a file named `main.tf`:
 
 ```hcl
 terraform {
   required_providers {
-    local = {
-      source  = "hashicorp/local"
-      version = "~> 2.0"
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 3.0"
     }
   }
 }
 
-resource "local_file" "hello" {
-  content  = "Hello, Terraform!"
-  filename = "${path.module}/hello.txt"
+provider "azurerm" {
+  features {}
+}
+
+resource "azurerm_resource_group" "example" {
+  name     = "rg-terraform-demo"
+  location = "East US"
 }
 ```
 
@@ -99,7 +147,7 @@ This downloads the required providers.
 terraform plan
 ```
 
-Preview what Terraform will create.
+Preview what Azure resources Terraform will create.
 
 ### 4. Apply Changes
 
@@ -107,15 +155,21 @@ Preview what Terraform will create.
 terraform apply
 ```
 
-Type `yes` to confirm and create the resources.
+Type `yes` to confirm and create the Azure resources.
 
-### 5. Destroy Resources
+### 5. Verify in Azure
+
+```bash
+az group show --name rg-terraform-demo
+```
+
+### 6. Destroy Resources
 
 ```bash
 terraform destroy
 ```
 
-Remove all resources created by Terraform.
+Remove all Azure resources created by Terraform.
 
 ## Core Concepts
 
@@ -124,8 +178,10 @@ Remove all resources created by Terraform.
 Providers are plugins that interact with APIs of cloud providers and services.
 
 ```hcl
-provider "aws" {
-  region = "us-east-1"
+provider "azurerm" {
+  features {}
+  
+  subscription_id = "00000000-0000-0000-0000-000000000000"
 }
 ```
 
@@ -134,9 +190,11 @@ provider "aws" {
 Resources are the most important element in Terraform. They represent infrastructure objects.
 
 ```hcl
-resource "aws_instance" "web" {
-  ami           = "ami-0c55b159cbfafe1f0"
-  instance_type = "t2.micro"
+resource "azurerm_virtual_machine" "web" {
+  name                  = "web-vm"
+  location              = "East US"
+  resource_group_name   = azurerm_resource_group.main.name
+  vm_size               = "Standard_B2s"
 }
 ```
 
@@ -145,10 +203,10 @@ resource "aws_instance" "web" {
 Variables allow you to parameterize your configurations.
 
 ```hcl
-variable "instance_type" {
-  description = "EC2 instance type"
+variable "vm_size" {
+  description = "Azure VM size"
   type        = string
-  default     = "t2.micro"
+  default     = "Standard_B2s"
 }
 ```
 
@@ -157,8 +215,8 @@ variable "instance_type" {
 Outputs display information about your infrastructure.
 
 ```hcl
-output "instance_ip" {
-  value = aws_instance.web.public_ip
+output "vm_ip" {
+  value = azurerm_public_ip.main.ip_address
 }
 ```
 
@@ -167,14 +225,9 @@ output "instance_ip" {
 Data sources allow you to fetch information from existing resources.
 
 ```hcl
-data "aws_ami" "ubuntu" {
-  most_recent = true
-  owners      = ["099720109477"]
-  
-  filter {
-    name   = "name"
-    values = ["ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-*"]
-  }
+data "azurerm_image" "ubuntu" {
+  name                = "ubuntu-20-04"
+  resource_group_name = "images-rg"
 }
 ```
 
@@ -183,11 +236,11 @@ data "aws_ami" "ubuntu" {
 Modules are containers for multiple resources that are used together.
 
 ```hcl
-module "vpc" {
-  source = "./modules/vpc"
+module "network" {
+  source = "./modules/network"
   
-  cidr_block = "10.0.0.0/16"
-  name       = "my-vpc"
+  address_space = "10.0.0.0/16"
+  name          = "my-vnet"
 }
 ```
 
@@ -240,70 +293,130 @@ A typical Terraform project structure:
 
 ## Examples
 
-### Example 1: AWS EC2 Instance
+### Example 1: Azure Virtual Machine
 
 ```hcl
 terraform {
   required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 4.0"
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 3.0"
     }
   }
 }
 
-provider "aws" {
-  region = var.region
+provider "azurerm" {
+  features {}
 }
 
-variable "region" {
-  default = "us-east-1"
+variable "location" {
+  default = "East US"
 }
 
-resource "aws_instance" "example" {
-  ami           = "ami-0c55b159cbfafe1f0"
-  instance_type = "t2.micro"
+resource "azurerm_resource_group" "example" {
+  name     = "rg-example"
+  location = var.location
+}
 
-  tags = {
-    Name = "ExampleInstance"
+resource "azurerm_virtual_network" "example" {
+  name                = "vnet-example"
+  address_space       = ["10.0.0.0/16"]
+  location            = azurerm_resource_group.example.location
+  resource_group_name = azurerm_resource_group.example.name
+}
+
+resource "azurerm_subnet" "example" {
+  name                 = "subnet-example"
+  resource_group_name  = azurerm_resource_group.example.name
+  virtual_network_name = azurerm_virtual_network.example.name
+  address_prefixes     = ["10.0.1.0/24"]
+}
+
+resource "azurerm_network_interface" "example" {
+  name                = "nic-example"
+  location            = azurerm_resource_group.example.location
+  resource_group_name = azurerm_resource_group.example.name
+
+  ip_configuration {
+    name                          = "internal"
+    subnet_id                     = azurerm_subnet.example.id
+    private_ip_address_allocation = "Dynamic"
   }
 }
 
-output "instance_id" {
-  value = aws_instance.example.id
+resource "azurerm_linux_virtual_machine" "example" {
+  name                = "vm-example"
+  resource_group_name = azurerm_resource_group.example.name
+  location            = azurerm_resource_group.example.location
+  size                = "Standard_B2s"
+  admin_username      = "adminuser"
+  
+  network_interface_ids = [
+    azurerm_network_interface.example.id,
+  ]
+
+  admin_ssh_key {
+    username   = "adminuser"
+    public_key = file("~/.ssh/id_rsa.pub")
+  }
+
+  os_disk {
+    caching              = "ReadWrite"
+    storage_account_type = "Standard_LRS"
+  }
+
+  source_image_reference {
+    publisher = "Canonical"
+    offer     = "0001-com-ubuntu-server-focal"
+    sku       = "20_04-lts"
+    version   = "latest"
+  }
+
+  tags = {
+    Name = "ExampleVM"
+  }
 }
 
-output "public_ip" {
-  value = aws_instance.example.public_ip
+output "vm_id" {
+  value = azurerm_linux_virtual_machine.example.id
+}
+
+output "private_ip" {
+  value = azurerm_network_interface.example.private_ip_address
 }
 ```
 
-### Example 2: AWS S3 Bucket
+### Example 2: Azure Storage Account
 
 ```hcl
-resource "aws_s3_bucket" "example" {
-  bucket = "my-unique-bucket-name-${random_id.bucket_id.hex}"
+resource "azurerm_resource_group" "storage" {
+  name     = "rg-storage"
+  location = "East US"
+}
+
+resource "azurerm_storage_account" "example" {
+  name                     = "stexample${random_id.storage_id.hex}"
+  resource_group_name      = azurerm_resource_group.storage.name
+  location                 = azurerm_resource_group.storage.location
+  account_tier             = "Standard"
+  account_replication_type = "LRS"
+  
+  blob_properties {
+    versioning_enabled = true
+  }
 
   tags = {
-    Name        = "My Bucket"
+    Name        = "StorageAccount"
     Environment = "Dev"
   }
 }
 
-resource "random_id" "bucket_id" {
-  byte_length = 8
+resource "random_id" "storage_id" {
+  byte_length = 4
 }
 
-resource "aws_s3_bucket_versioning" "example" {
-  bucket = aws_s3_bucket.example.id
-
-  versioning_configuration {
-    status = "Enabled"
-  }
-}
-
-output "bucket_name" {
-  value = aws_s3_bucket.example.id
+output "storage_account_name" {
+  value = azurerm_storage_account.example.name
 }
 ```
 
@@ -315,8 +428,8 @@ variable "environment" {
   type        = string
 }
 
-variable "instance_count" {
-  description = "Number of instances"
+variable "vm_count" {
+  description = "Number of VMs"
   type        = number
   default     = 1
 }
@@ -328,10 +441,12 @@ locals {
   }
 }
 
-resource "aws_instance" "app" {
-  count         = var.instance_count
-  ami           = "ami-0c55b159cbfafe1f0"
-  instance_type = "t2.micro"
+resource "azurerm_linux_virtual_machine" "app" {
+  count               = var.vm_count
+  name                = "vm-app-${count.index + 1}"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+  size                = "Standard_B2s"
 
   tags = merge(
     local.common_tags,
@@ -350,15 +465,15 @@ resource "aws_instance" "app" {
 - Use `.gitignore` for sensitive files
 
 ### 2. Remote State
-Store state remotely for team collaboration:
+Store state remotely for team collaboration using Azure Storage:
 
 ```hcl
 terraform {
-  backend "s3" {
-    bucket = "my-terraform-state"
-    key    = "prod/terraform.tfstate"
-    region = "us-east-1"
-    encrypt = true
+  backend "azurerm" {
+    resource_group_name  = "rg-terraform-state"
+    storage_account_name = "sttfstate"
+    container_name       = "tfstate"
+    key                  = "prod.terraform.tfstate"
   }
 }
 ```
@@ -406,8 +521,11 @@ tags = {
 Leverage data sources instead of hardcoding values:
 
 ```hcl
-data "aws_availability_zones" "available" {
-  state = "available"
+data "azurerm_client_config" "current" {}
+
+data "azurerm_virtual_network" "existing" {
+  name                = "existing-vnet"
+  resource_group_name = "existing-rg"
 }
 ```
 
@@ -416,14 +534,16 @@ Use state locking to prevent concurrent modifications:
 
 ```hcl
 terraform {
-  backend "s3" {
-    bucket         = "my-terraform-state"
-    key            = "terraform.tfstate"
-    region         = "us-east-1"
-    dynamodb_table = "terraform-locks"
+  backend "azurerm" {
+    resource_group_name  = "rg-terraform-state"
+    storage_account_name = "sttfstate"
+    container_name       = "tfstate"
+    key                  = "terraform.tfstate"
   }
 }
 ```
+
+Note: Azure Storage backend automatically supports state locking.
 
 ## Common Patterns
 
@@ -431,10 +551,12 @@ terraform {
 
 **Using count:**
 ```hcl
-resource "aws_instance" "server" {
-  count = 3
-  ami   = "ami-0c55b159cbfafe1f0"
-  instance_type = "t2.micro"
+resource "azurerm_linux_virtual_machine" "server" {
+  count               = 3
+  name                = "vm-server-${count.index}"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+  size                = "Standard_B2s"
   
   tags = {
     Name = "server-${count.index}"
@@ -446,19 +568,21 @@ resource "aws_instance" "server" {
 ```hcl
 variable "servers" {
   type = map(object({
-    instance_type = string
+    vm_size = string
   }))
   default = {
-    web = { instance_type = "t2.micro" }
-    app = { instance_type = "t2.small" }
+    web = { vm_size = "Standard_B2s" }
+    app = { vm_size = "Standard_B4ms" }
   }
 }
 
-resource "aws_instance" "server" {
+resource "azurerm_linux_virtual_machine" "server" {
   for_each = var.servers
   
-  ami           = "ami-0c55b159cbfafe1f0"
-  instance_type = each.value.instance_type
+  name                = "vm-${each.key}"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+  size                = each.value.vm_size
   
   tags = {
     Name = each.key
@@ -469,16 +593,23 @@ resource "aws_instance" "server" {
 ### Dynamic Blocks
 
 ```hcl
-resource "aws_security_group" "example" {
-  name = "example"
+resource "azurerm_network_security_group" "example" {
+  name                = "nsg-example"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
   
-  dynamic "ingress" {
-    for_each = var.ingress_rules
+  dynamic "security_rule" {
+    for_each = var.security_rules
     content {
-      from_port   = ingress.value.from_port
-      to_port     = ingress.value.to_port
-      protocol    = ingress.value.protocol
-      cidr_blocks = ingress.value.cidr_blocks
+      name                       = security_rule.value.name
+      priority                   = security_rule.value.priority
+      direction                  = security_rule.value.direction
+      access                     = security_rule.value.access
+      protocol                   = security_rule.value.protocol
+      source_port_range          = security_rule.value.source_port_range
+      destination_port_range     = security_rule.value.destination_port_range
+      source_address_prefix      = security_rule.value.source_address_prefix
+      destination_address_prefix = security_rule.value.destination_address_prefix
     }
   }
 }
@@ -487,22 +618,26 @@ resource "aws_security_group" "example" {
 ### Conditional Resources
 
 ```hcl
-resource "aws_instance" "example" {
-  count = var.create_instance ? 1 : 0
+resource "azurerm_linux_virtual_machine" "example" {
+  count = var.create_vm ? 1 : 0
   
-  ami           = "ami-0c55b159cbfafe1f0"
-  instance_type = "t2.micro"
+  name                = "vm-example"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+  size                = "Standard_B2s"
 }
 ```
 
 ### Depends On
 
 ```hcl
-resource "aws_instance" "web" {
-  ami           = "ami-0c55b159cbfafe1f0"
-  instance_type = "t2.micro"
+resource "azurerm_linux_virtual_machine" "web" {
+  name                = "vm-web"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+  size                = "Standard_B2s"
   
-  depends_on = [aws_security_group.web]
+  depends_on = [azurerm_network_security_group.web]
 }
 ```
 
@@ -529,8 +664,8 @@ terraform plan
 
 **Issue: Resource already exists**
 ```bash
-# Import existing resource
-terraform import aws_instance.example i-1234567890abcdef0
+# Import existing Azure resource
+terraform import azurerm_resource_group.example /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/myResourceGroup
 ```
 
 **Issue: Configuration syntax errors**
@@ -560,35 +695,40 @@ terraform apply
 
 ### Official Documentation
 - [Terraform Documentation](https://www.terraform.io/docs)
+- [Azure Provider Documentation](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs)
 - [Terraform Registry](https://registry.terraform.io/) - Providers and modules
-- [HashiCorp Learn](https://learn.hashicorp.com/terraform) - Interactive tutorials
+- [HashiCorp Learn - Azure](https://learn.hashicorp.com/collections/terraform/azure-get-started) - Interactive tutorials
 
-### Provider Documentation
-- [AWS Provider](https://registry.terraform.io/providers/hashicorp/aws/latest/docs)
-- [Azure Provider](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs)
-- [Google Cloud Provider](https://registry.terraform.io/providers/hashicorp/google/latest/docs)
+### Azure-Specific Resources
+- [Azure Terraform QuickStart Templates](https://github.com/Azure/terraform)
+- [Azure CAF Terraform Landing Zones](https://github.com/Azure/caf-terraform-landingzones)
+- [Azure Verified Modules](https://aka.ms/avm)
+- [Microsoft Learn - Terraform on Azure](https://docs.microsoft.com/en-us/azure/developer/terraform/)
 
 ### Community Resources
 - [Terraform GitHub](https://github.com/hashicorp/terraform)
 - [Terraform Community Forum](https://discuss.hashicorp.com/c/terraform-core)
+- [Azure Terraform Provider Issues](https://github.com/hashicorp/terraform-provider-azurerm/issues)
 - [r/Terraform](https://www.reddit.com/r/Terraform/)
 
 ### Books and Courses
 - "Terraform: Up and Running" by Yevgeniy Brikman
 - "Terraform in Action" by Scott Winkler
 - HashiCorp Certified: Terraform Associate Certification
+- Microsoft Learn: Infrastructure as Code with Terraform
 
 ### Tools
-- [tflint](https://github.com/terraform-linters/tflint) - Terraform linter
+- [tflint](https://github.com/terraform-linters/tflint) - Terraform linter with Azure rules
 - [terraform-docs](https://github.com/terraform-docs/terraform-docs) - Generate documentation
 - [terragrunt](https://terragrunt.gruntwork.io/) - Terraform wrapper
-- [checkov](https://www.checkov.io/) - Static code analysis for IaC
-- [infracost](https://www.infracost.io/) - Cloud cost estimates
+- [checkov](https://www.checkov.io/) - Static code analysis for IaC (Azure support)
+- [infracost](https://www.infracost.io/) - Azure cloud cost estimates
+- [terraform-compliance](https://terraform-compliance.com/) - BDD testing for Terraform
 
 ### Best Practice Guides
 - [Terraform Best Practices](https://www.terraform-best-practices.com/)
-- [AWS Terraform Best Practices](https://aws.amazon.com/blogs/apn/terraform-best-practices-for-aws-users/)
 - [Azure Terraform Best Practices](https://docs.microsoft.com/en-us/azure/developer/terraform/best-practices)
+- [Azure Landing Zones with Terraform](https://docs.microsoft.com/en-us/azure/cloud-adoption-framework/ready/landing-zone/terraform-landing-zone)
 
 ---
 

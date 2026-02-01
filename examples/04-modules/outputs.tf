@@ -1,19 +1,19 @@
-output "vpc_id" {
-  description = "ID of the VPC"
-  value       = module.vpc.vpc_id
+output "vnet_id" {
+  description = "ID of the Virtual Network"
+  value       = module.vnet.vnet_id
 }
 
 output "public_subnet_ids" {
   description = "IDs of public subnets"
-  value       = module.vpc.public_subnet_ids
+  value       = module.vnet.public_subnet_ids
 }
 
 output "private_subnet_ids" {
   description = "IDs of private subnets"
-  value       = module.vpc.private_subnet_ids
+  value       = module.vnet.private_subnet_ids
 }
 
-output "security_group_id" {
-  description = "ID of the example security group"
-  value       = aws_security_group.example.id
+output "nsg_id" {
+  description = "ID of the example network security group"
+  value       = azurerm_network_security_group.example.id
 }
