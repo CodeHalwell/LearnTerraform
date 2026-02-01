@@ -87,16 +87,17 @@ terraform force-unlock <lock-id> # Force unlock state
 ```hcl
 terraform {
   required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 3.0"
     }
   }
   required_version = ">= 1.0"
 }
 
-provider "aws" {
-  region = "us-east-1"
+provider "azurerm" {
+  features {}
+  subscription_id = "00000000-0000-0000-0000-000000000000"
 }
 ```
 
@@ -339,15 +340,24 @@ dynamic "ingress" {
 
 ## Backend Configuration
 
-### S3 Backend
+### Azure Storage Backend
 ```hcl
 terraform {
-  backend "s3" {
-    bucket         = "my-terraform-state"
-    key            = "prod/terraform.tfstate"
-    region         = "us-east-1"
-    encrypt        = true
-    dynamodb_table = "terraform-locks"
+  backend "azurerm" {
+    resource_group_name  = "rg-terraform-state"
+    storage_account_name = "sttfstate"
+    container_name       = "tfstate"
+    key                  = "terraform.tfstate"
+  }
+}
+```
+```hcl
+terraform {
+  backend "azurerm" {
+    resource_group_name  = "rg-terraform-state"
+    storage_account_name = "sttfstate"
+    container_name       = "tfstate"
+    key                  = "terraform.tfstate"
   }
 }
 ```
@@ -368,24 +378,19 @@ terraform {
 ## Environment Variables
 
 ```bash
-# AWS credentials
-export AWS_ACCESS_KEY_ID="..."
-export AWS_SECRET_ACCESS_KEY="..."
-export AWS_DEFAULT_REGION="us-east-1"
+# Azure credentials (for service principal authentication)
+export ARM_CLIENT_ID="00000000-0000-0000-0000-000000000000"
+export ARM_CLIENT_SECRET="your-client-secret"
+export ARM_SUBSCRIPTION_ID="00000000-0000-0000-0000-000000000000"
+export ARM_TENANT_ID="00000000-0000-0000-0000-000000000000"
 
-# Azure credentials
-export ARM_CLIENT_ID="..."
-export ARM_CLIENT_SECRET="..."
-export ARM_SUBSCRIPTION_ID="..."
-export ARM_TENANT_ID="..."
-
-# GCP credentials
-export GOOGLE_CREDENTIALS="path/to/key.json"
-export GOOGLE_PROJECT="my-project"
-export GOOGLE_REGION="us-central1"
+# Azure alternative (for managed identity)
+export ARM_USE_MSI="true"
+export ARM_SUBSCRIPTION_ID="00000000-0000-0000-0000-000000000000"
 
 # Terraform variables
 export TF_VAR_variable_name="value"
+export TF_VAR_location="East US"
 
 # Logging
 export TF_LOG="DEBUG"
@@ -395,12 +400,12 @@ export TF_LOG_PATH="./terraform.log"
 ## Best Practices
 
 1. Always use version constraints
-2. Store state remotely
+2. Store state remotely in Azure Storage
 3. Use workspaces for environments
-4. Enable state locking
+4. Enable state locking (automatic with Azure Storage backend)
 5. Never commit `.tfvars` files with secrets
-6. Use modules for reusable components
-7. Tag all resources
+6. Use modules for reusable Azure components
+7. Tag all Azure resources
 8. Use `terraform fmt` before committing
 9. Run `terraform validate` regularly
 10. Always `terraform plan` before `terraform apply`

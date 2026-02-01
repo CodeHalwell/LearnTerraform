@@ -1,6 +1,6 @@
-# Common Terraform Use Cases
+# Common Terraform Use Cases for Azure
 
-This document provides examples for common infrastructure scenarios.
+This document provides examples for common Azure infrastructure scenarios.
 
 ## Table of Contents
 
@@ -10,67 +10,138 @@ This document provides examples for common infrastructure scenarios.
 - [Networking](#networking)
 - [Load Balancing](#load-balancing)
 - [Auto Scaling](#auto-scaling)
-- [CI/CD Infrastructure](#cicd-infrastructure)
+- [Azure DevOps/CI-CD Infrastructure](#azure-devopsci-cd-infrastructure)
 - [Monitoring and Logging](#monitoring-and-logging)
+- [Container Orchestration](#container-orchestration)
 
 ## Web Application Architecture
 
 ### Basic Web Server
 
 ```hcl
-# VPC and networking
-resource "aws_vpc" "main" {
-  cidr_block = "10.0.0.0/16"
+# Resource Group
+resource "azurerm_resource_group" "web" {
+  name     = "rg-web-app"
+  location = "East US"
 }
 
-resource "aws_subnet" "public" {
-  vpc_id     = aws_vpc.main.id
-  cidr_block = "10.0.1.0/24"
+# Virtual Network
+resource "azurerm_virtual_network" "web" {
+  name                = "vnet-web"
+  address_space       = ["10.0.0.0/16"]
+  location            = azurerm_resource_group.web.location
+  resource_group_name = azurerm_resource_group.web.name
 }
 
-# Security group
-resource "aws_security_group" "web" {
-  vpc_id = aws_vpc.main.id
+# Subnet
+resource "azurerm_subnet" "web" {
+  name                 = "subnet-web"
+  resource_group_name  = azurerm_resource_group.web.name
+  virtual_network_name = azurerm_virtual_network.web.name
+  address_prefixes     = ["10.0.1.0/24"]
+}
 
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+# Public IP
+resource "azurerm_public_ip" "web" {
+  name                = "pip-web"
+  location            = azurerm_resource_group.web.location
+  resource_group_name = azurerm_resource_group.web.name
+  allocation_method   = "Static"
+  sku                 = "Standard"
+}
+
+# Network Security Group
+resource "azurerm_network_security_group" "web" {
+  name                = "nsg-web"
+  location            = azurerm_resource_group.web.location
+  resource_group_name = azurerm_resource_group.web.name
+
+  security_rule {
+    name                       = "HTTP"
+    priority                   = 100
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "80"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
   }
 
-  ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+  security_rule {
+    name                       = "HTTPS"
+    priority                   = 110
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "443"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
   }
 }
 
-# EC2 instance
-resource "aws_instance" "web" {
-  ami                    = "ami-0c55b159cbfafe1f0"
-  instance_type          = "t2.micro"
-  subnet_id              = aws_subnet.public.id
-  vpc_security_group_ids = [aws_security_group.web.id]
+# Network Interface
+resource "azurerm_network_interface" "web" {
+  name                = "nic-web"
+  location            = azurerm_resource_group.web.location
+  resource_group_name = azurerm_resource_group.web.name
 
-  user_data = <<-EOF
+  ip_configuration {
+    name                          = "internal"
+    subnet_id                     = azurerm_subnet.web.id
+    private_ip_address_allocation = "Dynamic"
+    public_ip_address_id          = azurerm_public_ip.web.id
+  }
+}
+
+# Associate NSG with NIC
+resource "azurerm_network_interface_security_group_association" "web" {
+  network_interface_id      = azurerm_network_interface.web.id
+  network_security_group_id = azurerm_network_security_group.web.id
+}
+
+# Linux VM
+resource "azurerm_linux_virtual_machine" "web" {
+  name                = "vm-web"
+  resource_group_name = azurerm_resource_group.web.name
+  location            = azurerm_resource_group.web.location
+  size                = "Standard_B2s"
+  admin_username      = "azureuser"
+
+  network_interface_ids = [
+    azurerm_network_interface.web.id,
+  ]
+
+  admin_ssh_key {
+    username   = "azureuser"
+    public_key = file("~/.ssh/id_rsa.pub")
+  }
+
+  os_disk {
+    caching              = "ReadWrite"
+    storage_account_type = "Premium_LRS"
+  }
+
+  source_image_reference {
+    publisher = "Canonical"
+    offer     = "0001-com-ubuntu-server-focal"
+    sku       = "20_04-lts-gen2"
+    version   = "latest"
+  }
+
+  custom_data = base64encode(<<-EOF
               #!/bin/bash
-              yum update -y
-              yum install -y httpd
-              systemctl start httpd
-              systemctl enable httpd
+              apt-get update
+              apt-get install -y nginx
+              systemctl start nginx
+              systemctl enable nginx
               EOF
+  )
 
   tags = {
-    Name = "WebServer"
+    Environment = "Production"
+    Application = "WebServer"
   }
 }
 ```
