@@ -48,4 +48,4 @@ Creates two text files using Terraform:
 
 ## Next Steps
 
-Move on to example 02-aws-ec2 to learn about cloud resources.
+Move on to example 02-azure-vm to learn about Azure cloud resources.

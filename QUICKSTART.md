@@ -94,7 +94,6 @@ Type `yes` when prompted. Terraform will create the resource group!
 az group show --name rg-terraform-quickstart
 # You should see your resource group details
 ```
-```
 
 ### 6. Clean Up
 

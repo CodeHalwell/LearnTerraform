@@ -29,9 +29,10 @@ variable "admin_username" {
 }
 
 variable "ssh_public_key" {
-  description = "SSH public key for VM access"
+  description = "SSH public key for VM access (must be provided by the user)"
   type        = string
-  default     = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC... (replace with your public key)"
+  # No default value - users must provide their own SSH public key
+  # Example: ssh_public_key = file("~/.ssh/id_rsa.pub")
 }
 
 variable "environment" {

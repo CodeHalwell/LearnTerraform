@@ -267,31 +267,31 @@ cidrhost("10.0.0.0/24", 5)       # "10.0.0.5"
 
 ### count
 ```hcl
-resource "aws_instance" "server" {
+resource "azurerm_linux_virtual_machine" "server" {
   count = 3
-  # Creates 3 instances
-  # Access with: aws_instance.server[0]
+  # Creates 3 VMs
+  # Access with: azurerm_linux_virtual_machine.server[0]
 }
 ```
 
 ### for_each
 ```hcl
-resource "aws_instance" "server" {
+resource "azurerm_linux_virtual_machine" "server" {
   for_each = toset(["web", "app", "db"])
-  # Access with: aws_instance.server["web"]
+  # Access with: azurerm_linux_virtual_machine.server["web"]
 }
 ```
 
 ### depends_on
 ```hcl
-resource "aws_instance" "web" {
-  depends_on = [aws_security_group.web]
+resource "azurerm_linux_virtual_machine" "web" {
+  depends_on = [azurerm_network_security_group.web]
 }
 ```
 
 ### lifecycle
 ```hcl
-resource "aws_instance" "web" {
+resource "azurerm_linux_virtual_machine" "web" {
   lifecycle {
     create_before_destroy = true
     prevent_destroy       = false
@@ -322,8 +322,8 @@ var.environment == "prod" ? "t2.large" : "t2.micro"
 
 ### Splat Expressions
 ```hcl
-aws_instance.server[*].id
-aws_instance.server[*].public_ip
+azurerm_linux_virtual_machine.server[*].id
+azurerm_linux_virtual_machine.server[*].private_ip_address
 ```
 
 ### Dynamic Blocks

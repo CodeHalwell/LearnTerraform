@@ -12,19 +12,19 @@ This example demonstrates how to create and use Terraform modules for reusable i
 
 ## What This Creates
 
-- A VPC module in the `vpc/` directory
-- A VPC with public and private subnets using the module
-- A security group that uses outputs from the VPC module
+- An Azure VNet module in the `vnet/` directory
+- An Azure Virtual Network with public and private subnets using the module
+- A network security group that uses outputs from the VNet module
 
 ## Project Structure
 
 ```
 04-modules/
-├── main.tf           # Root module using the VPC module
+├── main.tf           # Root module using the VNet module
 ├── variables.tf      # Root module variables
 ├── outputs.tf        # Root module outputs
 ├── README.md         # This file
-└── vpc/              # VPC module
+└── vnet/             # Azure VNet module
     ├── main.tf       # Module resources
     ├── variables.tf  # Module inputs
     ├── outputs.tf    # Module outputs
@@ -34,8 +34,8 @@ This example demonstrates how to create and use Terraform modules for reusable i
 ## How to Run
 
 ### Prerequisites
-- AWS Account
-- AWS CLI configured with credentials
+- Azure Account with active subscription
+- Azure CLI configured with credentials (`az login`)
 
 ### Steps
 
@@ -60,7 +60,7 @@ This example demonstrates how to create and use Terraform modules for reusable i
    terraform output
    ```
 
-5. **Clean up (Important - to avoid AWS charges):**
+5. **Clean up (Important - to avoid Azure charges):**
    ```bash
    terraform destroy
    ```
@@ -167,4 +167,4 @@ module "vpc" {
 
 - [Terraform Module Documentation](https://www.terraform.io/docs/language/modules/index.html)
 - [Module Development Best Practices](https://www.terraform.io/docs/language/modules/develop/index.html)
-- [Terraform AWS Modules](https://github.com/terraform-aws-modules)
+- [Azure Terraform Modules](https://registry.terraform.io/namespaces/Azure)

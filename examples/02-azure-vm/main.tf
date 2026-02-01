@@ -47,6 +47,10 @@ resource "azurerm_public_ip" "main" {
 }
 
 # Create a network security group
+# WARNING: For learning purposes only. In production environments:
+# - Restrict SSH access to specific IP addresses or ranges
+# - Consider using Azure Bastion for secure remote access
+# - Use Azure Security Center recommendations
 resource "azurerm_network_security_group" "main" {
   name                = "nsg-${var.vm_name}"
   location            = azurerm_resource_group.main.location
@@ -60,7 +64,7 @@ resource "azurerm_network_security_group" "main" {
     protocol                   = "Tcp"
     source_port_range          = "*"
     destination_port_range     = "22"
-    source_address_prefix      = "*"
+    source_address_prefix      = "*"  # Production: Replace with your IP address
     destination_address_prefix = "*"
   }
 

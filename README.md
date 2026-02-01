@@ -281,7 +281,7 @@ A typical Terraform project structure:
 ├── terraform.tfvars  # Variable values (not committed to git)
 ├── versions.tf       # Required Terraform and provider versions
 ├── modules/          # Reusable modules
-│   └── vpc/
+│   └── vnet/
 │       ├── main.tf
 │       ├── variables.tf
 │       └── outputs.tf
@@ -387,6 +387,22 @@ output "private_ip" {
 ```
 
 ### Example 2: Azure Storage Account
+
+> **Note:** This example uses the `random` provider. Include it in your `required_providers` block:
+> ```hcl
+> terraform {
+>   required_providers {
+>     azurerm = {
+>       source  = "hashicorp/azurerm"
+>       version = "~> 3.0"
+>     }
+>     random = {
+>       source  = "hashicorp/random"
+>       version = "~> 3.0"
+>     }
+>   }
+> }
+> ```
 
 ```hcl
 resource "azurerm_resource_group" "storage" {

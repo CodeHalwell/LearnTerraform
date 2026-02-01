@@ -206,7 +206,7 @@ resource "azurerm_mysql_flexible_server" "main" {
   administrator_login    = var.mysql_admin_username
   administrator_password = var.mysql_admin_password
   sku_name               = "B_Standard_B1s"
-  version                = "8.0.21"
+  version                = "8.0"
 
   storage {
     size_gb = 20
@@ -231,6 +231,22 @@ resource "azurerm_mysql_flexible_database" "main" {
 ## Storage Solutions
 
 ### Azure Storage Account with Blob Versioning
+
+> **Note:** This example uses the `random_id` resource from the `random` provider. Ensure your configuration includes:
+> ```hcl
+> terraform {
+>   required_providers {
+>     azurerm = {
+>       source  = "hashicorp/azurerm"
+>       version = "~> 3.0"
+>     }
+>     random = {
+>       source  = "hashicorp/random"
+>       version = "~> 3.0"
+>     }
+>   }
+> }
+> ```
 
 ```hcl
 resource "azurerm_storage_account" "app_data" {
@@ -675,6 +691,8 @@ resource "azurerm_monitor_action_group" "main" {
 
 ### Azure Container Instances
 
+> **Note:** This example uses the `random_id` resource from the `random` provider. Be sure to include the `random` provider in your Terraform `required_providers` block.
+
 ```hcl
 resource "azurerm_container_group" "main" {
   name                = "aci-app"
@@ -708,13 +726,22 @@ resource "random_id" "dns" {
 
 ### Azure Kubernetes Service (AKS)
 
+> **Note:** The Kubernetes version should be updated based on currently supported versions in Azure. Check the [Azure AKS release notes](https://learn.microsoft.com/en-us/azure/aks/supported-kubernetes-versions) for the latest supported versions.
+
 ```hcl
+# Variable for Kubernetes version
+variable "kubernetes_version" {
+  description = "AKS Kubernetes version. Check Azure documentation for currently supported versions."
+  type        = string
+  default     = "1.28"  # Use major.minor format for automatic patch version selection
+}
+
 resource "azurerm_kubernetes_cluster" "main" {
   name                = "aks-main"
   location            = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
   dns_prefix          = "myaks"
-  kubernetes_version  = "1.27.0"
+  kubernetes_version  = var.kubernetes_version
 
   default_node_pool {
     name                = "default"
@@ -756,6 +783,8 @@ resource "azurerm_kubernetes_cluster_node_pool" "user" {
 ## Azure-Specific Patterns
 
 ### Azure Key Vault Integration
+
+> **Note:** This example uses the `random_id` resource from the `random` provider. Be sure to include the `random` provider in your Terraform `required_providers` block.
 
 ```hcl
 resource "azurerm_key_vault" "main" {
