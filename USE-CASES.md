@@ -148,577 +148,648 @@ resource "azurerm_linux_virtual_machine" "web" {
 
 ## Database Setup
 
-### RDS MySQL Database
+## Database Setup
+
+### Azure SQL Database
 
 ```hcl
-resource "aws_db_subnet_group" "main" {
-  name       = "main"
-  subnet_ids = [aws_subnet.private1.id, aws_subnet.private2.id]
-}
+resource "azurerm_mssql_server" "main" {
+  name                         = "sqlserver-myapp"
+  resource_group_name          = azurerm_resource_group.main.name
+  location                     = azurerm_resource_group.main.location
+  version                      = "12.0"
+  administrator_login          = var.sql_admin_username
+  administrator_login_password = var.sql_admin_password
 
-resource "aws_db_instance" "main" {
-  identifier           = "mydb"
-  engine              = "mysql"
-  engine_version      = "8.0"
-  instance_class      = "db.t3.micro"
-  allocated_storage   = 20
-  storage_encrypted   = true
-  
-  db_name  = "myapp"
-  username = var.db_username
-  password = var.db_password
-  
-  db_subnet_group_name   = aws_db_subnet_group.main.name
-  vpc_security_group_ids = [aws_security_group.db.id]
-  
-  backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "mon:04:00-mon:05:00"
-  
-  skip_final_snapshot = true
-  
+  minimum_tls_version = "1.2"
+
   tags = {
-    Name = "MyDatabase"
+    Environment = "Production"
   }
 }
 
-resource "aws_security_group" "db" {
-  name   = "database-sg"
-  vpc_id = aws_vpc.main.id
+resource "azurerm_mssql_database" "main" {
+  name           = "sqldb-myapp"
+  server_id      = azurerm_mssql_server.main.id
+  collation      = "SQL_Latin1_General_CP1_CI_AS"
+  max_size_gb    = 20
+  sku_name       = "S0"
+  zone_redundant = false
 
-  ingress {
-    from_port       = 3306
-    to_port         = 3306
-    protocol        = "tcp"
-    security_groups = [aws_security_group.web.id]
+  tags = {
+    Environment = "Production"
   }
+}
+
+# Firewall rule to allow Azure services
+resource "azurerm_mssql_firewall_rule" "azure_services" {
+  name             = "AllowAzureServices"
+  server_id        = azurerm_mssql_server.main.id
+  start_ip_address = "0.0.0.0"
+  end_ip_address   = "0.0.0.0"
+}
+
+# Firewall rule for specific IP
+resource "azurerm_mssql_firewall_rule" "office" {
+  name             = "OfficeIP"
+  server_id        = azurerm_mssql_server.main.id
+  start_ip_address = "203.0.113.0"
+  end_ip_address   = "203.0.113.0"
+}
+```
+
+### Azure Database for MySQL
+
+```hcl
+resource "azurerm_mysql_flexible_server" "main" {
+  name                   = "mysql-myapp"
+  resource_group_name    = azurerm_resource_group.main.name
+  location               = azurerm_resource_group.main.location
+  administrator_login    = var.mysql_admin_username
+  administrator_password = var.mysql_admin_password
+  sku_name               = "B_Standard_B1s"
+  version                = "8.0.21"
+
+  storage {
+    size_gb = 20
+  }
+
+  backup_retention_days = 7
+
+  tags = {
+    Environment = "Production"
+  }
+}
+
+resource "azurerm_mysql_flexible_database" "main" {
+  name                = "myappdb"
+  resource_group_name = azurerm_resource_group.main.name
+  server_name         = azurerm_mysql_flexible_server.main.name
+  charset             = "utf8mb4"
+  collation           = "utf8mb4_unicode_ci"
 }
 ```
 
 ## Storage Solutions
 
-### S3 Bucket with Versioning
+### Azure Storage Account with Blob Versioning
 
 ```hcl
-resource "aws_s3_bucket" "app_data" {
-  bucket = "my-app-data-${random_id.bucket_suffix.hex}"
+resource "azurerm_storage_account" "app_data" {
+  name                     = "stappdata${random_id.storage_suffix.hex}"
+  resource_group_name      = azurerm_resource_group.main.name
+  location                 = azurerm_resource_group.main.location
+  account_tier             = "Standard"
+  account_replication_type = "LRS"
+  
+  blob_properties {
+    versioning_enabled = true
+    
+    delete_retention_policy {
+      days = 7
+    }
+  }
+
+  min_tls_version = "TLS1_2"
 
   tags = {
-    Name        = "App Data"
+    Name        = "App Data Storage"
     Environment = "Production"
   }
 }
 
-resource "random_id" "bucket_suffix" {
-  byte_length = 8
+resource "random_id" "storage_suffix" {
+  byte_length = 4
 }
 
-resource "aws_s3_bucket_versioning" "app_data" {
-  bucket = aws_s3_bucket.app_data.id
-
-  versioning_configuration {
-    status = "Enabled"
-  }
+# Create a blob container
+resource "azurerm_storage_container" "data" {
+  name                  = "appdata"
+  storage_account_name  = azurerm_storage_account.app_data.name
+  container_access_type = "private"
 }
 
-resource "aws_s3_bucket_encryption" "app_data" {
-  bucket = aws_s3_bucket.app_data.id
+# Block public access
+resource "azurerm_storage_account_network_rules" "app_data" {
+  storage_account_id = azurerm_storage_account.app_data.id
 
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
-    }
-  }
-}
-
-resource "aws_s3_bucket_public_access_block" "app_data" {
-  bucket = aws_s3_bucket.app_data.id
-
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
+  default_action             = "Deny"
+  bypass                     = ["AzureServices"]
+  virtual_network_subnet_ids = [azurerm_subnet.app.id]
 }
 ```
 
 ## Networking
 
-### VPC with Public and Private Subnets
+### Azure Virtual Network with Subnets and NSGs
 
 ```hcl
-resource "aws_vpc" "main" {
-  cidr_block           = "10.0.0.0/16"
-  enable_dns_hostnames = true
-  enable_dns_support   = true
+resource "azurerm_virtual_network" "main" {
+  name                = "vnet-main"
+  address_space       = ["10.0.0.0/16"]
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  dns_servers         = ["10.0.0.4", "10.0.0.5"]
 
   tags = {
-    Name = "main-vpc"
-  }
-}
-
-# Internet Gateway
-resource "aws_internet_gateway" "main" {
-  vpc_id = aws_vpc.main.id
-
-  tags = {
-    Name = "main-igw"
+    Environment = "Production"
   }
 }
 
 # Public Subnets
-resource "aws_subnet" "public" {
-  count                   = 2
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = "10.0.${count.index + 1}.0/24"
-  availability_zone       = data.aws_availability_zones.available.names[count.index]
-  map_public_ip_on_launch = true
-
-  tags = {
-    Name = "public-subnet-${count.index + 1}"
-  }
+resource "azurerm_subnet" "public" {
+  count                = 2
+  name                 = "subnet-public-${count.index + 1}"
+  resource_group_name  = azurerm_resource_group.main.name
+  virtual_network_name = azurerm_virtual_network.main.name
+  address_prefixes     = [cidrsubnet("10.0.0.0/16", 8, count.index)]
 }
 
 # Private Subnets
-resource "aws_subnet" "private" {
-  count             = 2
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = "10.0.${count.index + 10}.0/24"
-  availability_zone = data.aws_availability_zones.available.names[count.index]
+resource "azurerm_subnet" "private" {
+  count                = 2
+  name                 = "subnet-private-${count.index + 1}"
+  resource_group_name  = azurerm_resource_group.main.name
+  virtual_network_name = azurerm_virtual_network.main.name
+  address_prefixes     = [cidrsubnet("10.0.0.0/16", 8, count.index + 10)]
+}
 
-  tags = {
-    Name = "private-subnet-${count.index + 1}"
+# Public NSG
+resource "azurerm_network_security_group" "public" {
+  name                = "nsg-public"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+
+  security_rule {
+    name                       = "AllowHTTP"
+    priority                   = 100
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "80"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "AllowHTTPS"
+    priority                   = 110
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "443"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
   }
 }
 
-# NAT Gateway
-resource "aws_eip" "nat" {
-  domain = "vpc"
+# Associate NSG with public subnets
+resource "azurerm_subnet_network_security_group_association" "public" {
+  count                     = 2
+  subnet_id                 = azurerm_subnet.public[count.index].id
+  network_security_group_id = azurerm_network_security_group.public.id
 }
 
-resource "aws_nat_gateway" "main" {
-  allocation_id = aws_eip.nat.id
-  subnet_id     = aws_subnet.public[0].id
-
-  tags = {
-    Name = "main-nat-gateway"
-  }
+# NAT Gateway for private subnets
+resource "azurerm_public_ip" "nat" {
+  name                = "pip-nat"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  allocation_method   = "Static"
+  sku                 = "Standard"
 }
 
-# Route Tables
-resource "aws_route_table" "public" {
-  vpc_id = aws_vpc.main.id
-
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.main.id
-  }
-
-  tags = {
-    Name = "public-rt"
-  }
+resource "azurerm_nat_gateway" "main" {
+  name                = "nat-main"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  sku_name            = "Standard"
 }
 
-resource "aws_route_table" "private" {
-  vpc_id = aws_vpc.main.id
-
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.main.id
-  }
-
-  tags = {
-    Name = "private-rt"
-  }
+resource "azurerm_nat_gateway_public_ip_association" "main" {
+  nat_gateway_id       = azurerm_nat_gateway.main.id
+  public_ip_address_id = azurerm_public_ip.nat.id
 }
 
-# Route Table Associations
-resource "aws_route_table_association" "public" {
+resource "azurerm_subnet_nat_gateway_association" "private" {
   count          = 2
-  subnet_id      = aws_subnet.public[count.index].id
-  route_table_id = aws_route_table.public.id
-}
-
-resource "aws_route_table_association" "private" {
-  count          = 2
-  subnet_id      = aws_subnet.private[count.index].id
-  route_table_id = aws_route_table.private.id
-}
-
-data "aws_availability_zones" "available" {
-  state = "available"
+  subnet_id      = azurerm_subnet.private[count.index].id
+  nat_gateway_id = azurerm_nat_gateway.main.id
 }
 ```
 
 ## Load Balancing
 
-### Application Load Balancer
+### Azure Load Balancer
 
 ```hcl
-resource "aws_lb" "main" {
-  name               = "main-alb"
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb.id]
-  subnets            = aws_subnet.public[*].id
+resource "azurerm_public_ip" "lb" {
+  name                = "pip-lb"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  allocation_method   = "Static"
+  sku                 = "Standard"
+}
 
-  enable_deletion_protection = false
+resource "azurerm_lb" "main" {
+  name                = "lb-main"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  sku                 = "Standard"
 
-  tags = {
-    Name = "main-alb"
+  frontend_ip_configuration {
+    name                 = "PublicIPAddress"
+    public_ip_address_id = azurerm_public_ip.lb.id
   }
 }
 
-resource "aws_lb_target_group" "main" {
-  name     = "main-tg"
-  port     = 80
-  protocol = "HTTP"
-  vpc_id   = aws_vpc.main.id
-
-  health_check {
-    enabled             = true
-    healthy_threshold   = 2
-    interval            = 30
-    matcher             = "200"
-    path                = "/health"
-    port                = "traffic-port"
-    protocol            = "HTTP"
-    timeout             = 5
-    unhealthy_threshold = 2
-  }
+resource "azurerm_lb_backend_address_pool" "main" {
+  loadbalancer_id = azurerm_lb.main.id
+  name            = "BackEndAddressPool"
 }
 
-resource "aws_lb_listener" "main" {
-  load_balancer_arn = aws_lb.main.arn
-  port              = "80"
-  protocol          = "HTTP"
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.main.arn
-  }
+resource "azurerm_lb_probe" "main" {
+  loadbalancer_id = azurerm_lb.main.id
+  name            = "http-probe"
+  protocol        = "Http"
+  request_path    = "/health"
+  port            = 80
 }
 
-resource "aws_security_group" "alb" {
-  name   = "alb-sg"
-  vpc_id = aws_vpc.main.id
+resource "azurerm_lb_rule" "main" {
+  loadbalancer_id                = azurerm_lb.main.id
+  name                           = "HTTPRule"
+  protocol                       = "Tcp"
+  frontend_port                  = 80
+  backend_port                   = 80
+  frontend_ip_configuration_name = "PublicIPAddress"
+  backend_address_pool_ids       = [azurerm_lb_backend_address_pool.main.id]
+  probe_id                       = azurerm_lb_probe.main.id
+}
+```
 
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+### Azure Application Gateway
+
+```hcl
+resource "azurerm_public_ip" "appgw" {
+  name                = "pip-appgw"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  allocation_method   = "Static"
+  sku                 = "Standard"
+}
+
+resource "azurerm_application_gateway" "main" {
+  name                = "appgw-main"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+
+  sku {
+    name     = "Standard_v2"
+    tier     = "Standard_v2"
+    capacity = 2
   }
 
-  ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+  gateway_ip_configuration {
+    name      = "gateway-ip-config"
+    subnet_id = azurerm_subnet.appgw.id
   }
 
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+  frontend_port {
+    name = "http-port"
+    port = 80
+  }
+
+  frontend_ip_configuration {
+    name                 = "frontend-ip"
+    public_ip_address_id = azurerm_public_ip.appgw.id
+  }
+
+  backend_address_pool {
+    name = "backend-pool"
+  }
+
+  backend_http_settings {
+    name                  = "http-settings"
+    cookie_based_affinity = "Disabled"
+    port                  = 80
+    protocol              = "Http"
+    request_timeout       = 60
+  }
+
+  http_listener {
+    name                           = "http-listener"
+    frontend_ip_configuration_name = "frontend-ip"
+    frontend_port_name             = "http-port"
+    protocol                       = "Http"
+  }
+
+  request_routing_rule {
+    name                       = "routing-rule"
+    rule_type                  = "Basic"
+    http_listener_name         = "http-listener"
+    backend_address_pool_name  = "backend-pool"
+    backend_http_settings_name = "http-settings"
+    priority                   = 100
   }
 }
 ```
 
 ## Auto Scaling
 
-### Auto Scaling Group with Launch Template
+### Azure Virtual Machine Scale Set
 
 ```hcl
-resource "aws_launch_template" "main" {
-  name_prefix   = "web-"
-  image_id      = data.aws_ami.amazon_linux_2.id
-  instance_type = "t2.micro"
+resource "azurerm_linux_virtual_machine_scale_set" "main" {
+  name                = "vmss-main"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+  sku                 = "Standard_B2s"
+  instances           = 2
+  admin_username      = "azureuser"
 
-  vpc_security_group_ids = [aws_security_group.web.id]
+  admin_ssh_key {
+    username   = "azureuser"
+    public_key = file("~/.ssh/id_rsa.pub")
+  }
 
-  user_data = base64encode(<<-EOF
+  source_image_reference {
+    publisher = "Canonical"
+    offer     = "0001-com-ubuntu-server-focal"
+    sku       = "20_04-lts-gen2"
+    version   = "latest"
+  }
+
+  os_disk {
+    storage_account_type = "Premium_LRS"
+    caching              = "ReadWrite"
+  }
+
+  network_interface {
+    name    = "nic"
+    primary = true
+
+    ip_configuration {
+      name      = "internal"
+      primary   = true
+      subnet_id = azurerm_subnet.app.id
+
+      load_balancer_backend_address_pool_ids = [
+        azurerm_lb_backend_address_pool.main.id
+      ]
+    }
+  }
+
+  custom_data = base64encode(<<-EOF
               #!/bin/bash
-              yum update -y
-              yum install -y httpd
-              systemctl start httpd
-              systemctl enable httpd
-              echo "<h1>Server $(hostname -f)</h1>" > /var/www/html/index.html
+              apt-get update
+              apt-get install -y nginx
+              systemctl start nginx
               EOF
   )
+}
 
-  tag_specifications {
-    resource_type = "instance"
-    tags = {
-      Name = "web-server"
+# Autoscale settings
+resource "azurerm_monitor_autoscale_setting" "main" {
+  name                = "autoscale-main"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+  target_resource_id  = azurerm_linux_virtual_machine_scale_set.main.id
+
+  profile {
+    name = "AutoScale"
+
+    capacity {
+      default = 2
+      minimum = 2
+      maximum = 10
     }
-  }
-}
 
-resource "aws_autoscaling_group" "main" {
-  name                = "web-asg"
-  vpc_zone_identifier = aws_subnet.private[*].id
-  target_group_arns   = [aws_lb_target_group.main.arn]
-  health_check_type   = "ELB"
-  health_check_grace_period = 300
+    rule {
+      metric_trigger {
+        metric_name        = "Percentage CPU"
+        metric_resource_id = azurerm_linux_virtual_machine_scale_set.main.id
+        time_grain         = "PT1M"
+        statistic          = "Average"
+        time_window        = "PT5M"
+        time_aggregation   = "Average"
+        operator           = "GreaterThan"
+        threshold          = 75
+      }
 
-  min_size         = 2
-  max_size         = 10
-  desired_capacity = 2
-
-  launch_template {
-    id      = aws_launch_template.main.id
-    version = "$Latest"
-  }
-
-  tag {
-    key                 = "Name"
-    value               = "web-server"
-    propagate_at_launch = true
-  }
-}
-
-# Auto Scaling Policies
-resource "aws_autoscaling_policy" "scale_up" {
-  name                   = "scale-up"
-  scaling_adjustment     = 1
-  adjustment_type        = "ChangeInCapacity"
-  cooldown               = 300
-  autoscaling_group_name = aws_autoscaling_group.main.name
-}
-
-resource "aws_autoscaling_policy" "scale_down" {
-  name                   = "scale-down"
-  scaling_adjustment     = -1
-  adjustment_type        = "ChangeInCapacity"
-  cooldown               = 300
-  autoscaling_group_name = aws_autoscaling_group.main.name
-}
-```
-
-## CI/CD Infrastructure
-
-### CodePipeline with CodeBuild
-
-```hcl
-resource "aws_s3_bucket" "artifacts" {
-  bucket = "my-pipeline-artifacts-${random_id.bucket_suffix.hex}"
-}
-
-resource "aws_codepipeline" "main" {
-  name     = "main-pipeline"
-  role_arn = aws_iam_role.codepipeline.arn
-
-  artifact_store {
-    location = aws_s3_bucket.artifacts.bucket
-    type     = "S3"
-  }
-
-  stage {
-    name = "Source"
-
-    action {
-      name             = "Source"
-      category         = "Source"
-      owner            = "ThirdParty"
-      provider         = "GitHub"
-      version          = "1"
-      output_artifacts = ["source_output"]
-
-      configuration = {
-        Owner      = var.github_owner
-        Repo       = var.github_repo
-        Branch     = "main"
-        OAuthToken = var.github_token
+      scale_action {
+        direction = "Increase"
+        type      = "ChangeCount"
+        value     = "1"
+        cooldown  = "PT5M"
       }
     }
-  }
 
-  stage {
-    name = "Build"
+    rule {
+      metric_trigger {
+        metric_name        = "Percentage CPU"
+        metric_resource_id = azurerm_linux_virtual_machine_scale_set.main.id
+        time_grain         = "PT1M"
+        statistic          = "Average"
+        time_window        = "PT5M"
+        time_aggregation   = "Average"
+        operator           = "LessThan"
+        threshold          = 25
+      }
 
-    action {
-      name             = "Build"
-      category         = "Build"
-      owner            = "AWS"
-      provider         = "CodeBuild"
-      input_artifacts  = ["source_output"]
-      output_artifacts = ["build_output"]
-      version          = "1"
-
-      configuration = {
-        ProjectName = aws_codebuild_project.main.name
+      scale_action {
+        direction = "Decrease"
+        type      = "ChangeCount"
+        value     = "1"
+        cooldown  = "PT5M"
       }
     }
-  }
-
-  stage {
-    name = "Deploy"
-
-    action {
-      name            = "Deploy"
-      category        = "Deploy"
-      owner           = "AWS"
-      provider        = "ECS"
-      input_artifacts = ["build_output"]
-      version         = "1"
-
-      configuration = {
-        ClusterName = aws_ecs_cluster.main.name
-        ServiceName = aws_ecs_service.main.name
-      }
-    }
-  }
-}
-
-resource "aws_codebuild_project" "main" {
-  name          = "main-build"
-  service_role  = aws_iam_role.codebuild.arn
-
-  artifacts {
-    type = "CODEPIPELINE"
-  }
-
-  environment {
-    compute_type                = "BUILD_GENERAL1_SMALL"
-    image                       = "aws/codebuild/standard:5.0"
-    type                        = "LINUX_CONTAINER"
-    image_pull_credentials_type = "CODEBUILD"
-  }
-
-  source {
-    type = "CODEPIPELINE"
   }
 }
 ```
 
 ## Monitoring and Logging
 
-### CloudWatch Alarms and Log Groups
+### Azure Monitor and Log Analytics
 
 ```hcl
-# Log Group
-resource "aws_cloudwatch_log_group" "app" {
-  name              = "/aws/app/main"
-  retention_in_days = 30
+# Log Analytics Workspace
+resource "azurerm_log_analytics_workspace" "main" {
+  name                = "law-main"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  sku                 = "PerGB2018"
+  retention_in_days   = 30
 
   tags = {
-    Application = "main"
+    Environment = "Production"
   }
 }
 
-# CPU Alarm
-resource "aws_cloudwatch_metric_alarm" "cpu_high" {
-  alarm_name          = "high-cpu-utilization"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "2"
-  metric_name         = "CPUUtilization"
-  namespace           = "AWS/EC2"
-  period              = "120"
-  statistic           = "Average"
-  threshold           = "80"
-  alarm_description   = "This metric monitors ec2 cpu utilization"
-  alarm_actions       = [aws_sns_topic.alerts.arn]
+# Application Insights
+resource "azurerm_application_insights" "main" {
+  name                = "appi-main"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  workspace_id        = azurerm_log_analytics_workspace.main.id
+  application_type    = "web"
+}
 
-  dimensions = {
-    AutoScalingGroupName = aws_autoscaling_group.main.name
+# Metric Alert for CPU
+resource "azurerm_monitor_metric_alert" "cpu_alert" {
+  name                = "alert-cpu-high"
+  resource_group_name = azurerm_resource_group.main.name
+  scopes              = [azurerm_linux_virtual_machine.main.id]
+  description         = "Alert when CPU usage exceeds 80%"
+  severity            = 2
+  frequency           = "PT1M"
+  window_size         = "PT5M"
+
+  criteria {
+    metric_namespace = "Microsoft.Compute/virtualMachines"
+    metric_name      = "Percentage CPU"
+    aggregation      = "Average"
+    operator         = "GreaterThan"
+    threshold        = 80
+  }
+
+  action {
+    action_group_id = azurerm_monitor_action_group.main.id
   }
 }
 
-# SNS Topic for Alerts
-resource "aws_sns_topic" "alerts" {
-  name = "infrastructure-alerts"
-}
+# Action Group for notifications
+resource "azurerm_monitor_action_group" "main" {
+  name                = "ag-alerts"
+  resource_group_name = azurerm_resource_group.main.name
+  short_name          = "alerts"
 
-resource "aws_sns_topic_subscription" "alerts_email" {
-  topic_arn = aws_sns_topic.alerts.arn
-  protocol  = "email"
-  endpoint  = var.alert_email
-}
-
-# Dashboard
-resource "aws_cloudwatch_dashboard" "main" {
-  dashboard_name = "main-dashboard"
-
-  dashboard_body = jsonencode({
-    widgets = [
-      {
-        type = "metric"
-        properties = {
-          metrics = [
-            ["AWS/EC2", "CPUUtilization", { stat = "Average" }]
-          ]
-          period = 300
-          stat   = "Average"
-          region = "us-east-1"
-          title  = "EC2 CPU Utilization"
-        }
-      }
-    ]
-  })
+  email_receiver {
+    name          = "adminemail"
+    email_address = var.alert_email
+  }
 }
 ```
 
 ## Container Orchestration
 
-### ECS Fargate Service
+### Azure Container Instances
 
 ```hcl
-resource "aws_ecs_cluster" "main" {
-  name = "main-cluster"
-}
+resource "azurerm_container_group" "main" {
+  name                = "aci-app"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  ip_address_type     = "Public"
+  dns_name_label      = "myapp-${random_id.dns.hex}"
+  os_type             = "Linux"
 
-resource "aws_ecs_task_definition" "app" {
-  family                   = "app"
-  network_mode             = "awsvpc"
-  requires_compatibilities = ["FARGATE"]
-  cpu                      = "256"
-  memory                   = "512"
-  execution_role_arn       = aws_iam_role.ecs_execution.arn
+  container {
+    name   = "app"
+    image  = "nginx:latest"
+    cpu    = "0.5"
+    memory = "1.5"
 
-  container_definitions = jsonencode([
-    {
-      name  = "app"
-      image = "nginx:latest"
-      portMappings = [
-        {
-          containerPort = 80
-          protocol      = "tcp"
-        }
-      ]
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          "awslogs-group"         = aws_cloudwatch_log_group.app.name
-          "awslogs-region"        = "us-east-1"
-          "awslogs-stream-prefix" = "app"
-        }
-      }
+    ports {
+      port     = 80
+      protocol = "TCP"
     }
-  ])
+  }
+
+  tags = {
+    Environment = "Production"
+  }
 }
 
-resource "aws_ecs_service" "main" {
-  name            = "main-service"
-  cluster         = aws_ecs_cluster.main.id
-  task_definition = aws_ecs_task_definition.app.arn
-  desired_count   = 2
-  launch_type     = "FARGATE"
+resource "random_id" "dns" {
+  byte_length = 4
+}
+```
 
-  network_configuration {
-    subnets          = aws_subnet.private[*].id
-    security_groups  = [aws_security_group.ecs.id]
-    assign_public_ip = false
+### Azure Kubernetes Service (AKS)
+
+```hcl
+resource "azurerm_kubernetes_cluster" "main" {
+  name                = "aks-main"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  dns_prefix          = "myaks"
+  kubernetes_version  = "1.27.0"
+
+  default_node_pool {
+    name                = "default"
+    node_count          = 2
+    vm_size             = "Standard_D2s_v3"
+    os_disk_size_gb     = 30
+    vnet_subnet_id      = azurerm_subnet.aks.id
+    enable_auto_scaling = true
+    min_count           = 2
+    max_count           = 5
   }
 
-  load_balancer {
-    target_group_arn = aws_lb_target_group.main.arn
-    container_name   = "app"
-    container_port   = 80
+  identity {
+    type = "SystemAssigned"
   }
+
+  network_profile {
+    network_plugin    = "azure"
+    load_balancer_sku = "standard"
+  }
+
+  tags = {
+    Environment = "Production"
+  }
+}
+
+# Additional node pool for specific workloads
+resource "azurerm_kubernetes_cluster_node_pool" "user" {
+  name                  = "userpool"
+  kubernetes_cluster_id = azurerm_kubernetes_cluster.main.id
+  vm_size               = "Standard_D4s_v3"
+  node_count            = 1
+  enable_auto_scaling   = true
+  min_count             = 1
+  max_count             = 3
+}
+```
+
+## Azure-Specific Patterns
+
+### Azure Key Vault Integration
+
+```hcl
+resource "azurerm_key_vault" "main" {
+  name                = "kv-${random_id.kv.hex}"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  tenant_id           = data.azurerm_client_config.current.tenant_id
+  sku_name            = "standard"
+
+  access_policy {
+    tenant_id = data.azurerm_client_config.current.tenant_id
+    object_id = data.azurerm_client_config.current.object_id
+
+    secret_permissions = [
+      "Get", "List", "Set", "Delete"
+    ]
+  }
+}
+
+resource "azurerm_key_vault_secret" "db_password" {
+  name         = "db-password"
+  value        = var.db_password
+  key_vault_id = azurerm_key_vault.main.id
+}
+
+data "azurerm_client_config" "current" {}
+
+resource "random_id" "kv" {
+  byte_length = 4
 }
 ```
 
 ---
 
-These examples demonstrate common Terraform patterns. Mix and match them based on your needs. For complete, runnable examples, see the `examples/` directory.
+These examples demonstrate common Azure infrastructure patterns using Terraform. For complete, runnable examples, see the `examples/` directory. For more Azure-specific patterns, visit the [Azure Terraform Provider Documentation](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs).
