@@ -96,7 +96,7 @@ resource "azurerm_network_security_group" "public" {
 
 # Associate NSG with public subnets
 resource "azurerm_subnet_network_security_group_association" "public" {
-  count                     = var.public_subnet_count
+  count                     = var.public_subnet_count > 0 ? var.public_subnet_count : 0
   subnet_id                 = azurerm_subnet.public[count.index].id
   network_security_group_id = azurerm_network_security_group.public[0].id
 }
@@ -118,7 +118,7 @@ resource "azurerm_network_security_group" "private" {
 
 # Associate NSG with private subnets
 resource "azurerm_subnet_network_security_group_association" "private" {
-  count                     = var.private_subnet_count
+  count                     = var.private_subnet_count > 0 ? var.private_subnet_count : 0
   subnet_id                 = azurerm_subnet.private[count.index].id
   network_security_group_id = azurerm_network_security_group.private[0].id
 }

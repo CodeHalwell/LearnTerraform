@@ -148,8 +148,6 @@ resource "azurerm_linux_virtual_machine" "web" {
 
 ## Database Setup
 
-## Database Setup
-
 ### Azure SQL Database
 
 ```hcl
