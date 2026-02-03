@@ -1,0 +1,32 @@
+# Example values file
+# Copy this to terraform.tfvars and customize
+
+environment   = "dev"
+server_count  = 3
+server_name   = "web-server"
+server_size   = "medium"
+
+enabled_features = [
+  "monitoring",
+  "backup",
+  "logging",
+  "auto-scaling"
+]
+
+default_tags = {
+  Project     = "MyApp"
+  ManagedBy   = "Terraform"
+  Team        = "DevOps"
+  CostCenter  = "Engineering"
+}
+
+network_config = {
+  vpc_cidr     = "10.0.0.0/16"
+  subnet_count = 3
+  enable_nat   = true
+}
+
+enable_monitoring = true
+
+# Sensitive values should not be committed to version control
+# api_key = "your-secret-api-key"
